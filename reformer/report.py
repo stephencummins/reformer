@@ -23,10 +23,11 @@ KIND_LABELS = {
 }
 
 
-def to_json(res: ScanResult, items: list[Item], sources: list[str]) -> dict:
+def to_json(res: ScanResult, items: list[Item], sources: list[str], enumerated: bool = False) -> dict:
     return {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "sources": sources,
+        "forms_count_is_complete": enumerated,
         "summary": res.summary(),
         "totals": totals(items),
         "items": [i.as_dict() for i in items],
@@ -39,13 +40,28 @@ def _esc(v) -> str:
     return html.escape(str(v))
 
 
+def _forms_caveat(enumerated: bool) -> str:
+    """How much the Microsoft Forms number is worth depends entirely on where
+    it came from, so the report says which."""
+    if enumerated:
+        return ('<div class="caveat"><b>Counted from a tenant enumeration.</b> Two gaps survive it: '
+                'forms owned by a Microsoft 365 <b>group</b>, which the application permission cannot '
+                'read, and forms of hard-deleted users, which are destroyed 30 days after the account '
+                'goes. Everything else owned by an active user should be here.</div>')
+    return ('<div class="caveat"><b>This Microsoft Forms count is a floor, not a total.</b> Only forms '
+            'a flow names are visible to a package scan; one somebody made to collect information, with '
+            'nothing downstream, appears in no package and no connector inventory. A tenant enumeration '
+            'is possible — see the README — and passing it as <code>--forms-listing</code> turns this '
+            'into a real number.</div>')
+
+
 def _hours(item: Item) -> str:
     if item.low_hours == item.high_hours:
         return f"{item.low_hours:g}h"
     return f"{item.low_hours:g}–{item.high_hours:g}h"
 
 
-def to_html(res: ScanResult, items: list[Item], sources: list[str]) -> str:
+def to_html(res: ScanResult, items: list[Item], sources: list[str], enumerated: bool = False) -> str:
     t = totals(items)
     rows = []
     for kind in KIND_LABELS:
@@ -105,10 +121,7 @@ def to_html(res: ScanResult, items: list[Item], sources: list[str]) -> str:
   <div class="card"><b>{len(res.canvas_apps)}</b><span>canvas apps</span></div>
 </div>
 
-<div class="caveat">A Microsoft Form is only visible here when a flow names it. One that
-somebody made to collect information, with nothing downstream, appears in no package and no
-connector inventory — it has to come from asking owners. Treat the Microsoft Forms count as a
-floor, never a total.</div>
+{_forms_caveat(enumerated)}
 
 <h2>Treatment</h2><ul>{split or '<li>nothing to do</li>'}</ul>
 {''.join(rows)}
@@ -116,10 +129,12 @@ floor, never a total.</div>
 """
 
 
-def write(path_json, path_html, res: ScanResult, items: list[Item], sources: list[str]) -> None:
+def write(path_json, path_html, res: ScanResult, items: list[Item], sources: list[str],
+          enumerated: bool = False) -> None:
     if path_json:
         path_json.parent.mkdir(parents=True, exist_ok=True)
-        path_json.write_text(json.dumps(to_json(res, items, sources), indent=2) + "\n", encoding="utf-8")
+        path_json.write_text(json.dumps(to_json(res, items, sources, enumerated), indent=2) + "\n",
+                             encoding="utf-8")
     if path_html:
         path_html.parent.mkdir(parents=True, exist_ok=True)
-        path_html.write_text(to_html(res, items, sources), encoding="utf-8")
+        path_html.write_text(to_html(res, items, sources, enumerated), encoding="utf-8")

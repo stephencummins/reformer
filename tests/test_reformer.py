@@ -16,7 +16,8 @@ from reformer import cli
 from reformer.classify import CONTENT, CONVERT, RECREATE, ROUTE, classify, totals
 from reformer.package import Container, walk_dicts
 from reformer.report import to_html, to_json
-from reformer.scan import merge, scan_package, scan_property_bags, scan_site_listing
+from reformer.scan import (merge, scan_forms_listing, scan_package, scan_property_bags,
+                           scan_site_listing)
 
 FORM_A = "AAAAFORM" + "0" * 60 + "01u"
 FORM_B = "BBBBFORM" + "0" * 60 + "02u"
@@ -243,7 +244,8 @@ class ReportTests(unittest.TestCase):
 
     def test_html_states_the_floor_caveat_and_escapes_content(self):
         html = to_html(self.res, self.items, ["Demo.zip"])
-        self.assertIn("floor, never a total", html)
+        self.assertIn("is a floor, not a total", html)
+        self.assertIn("--forms-listing", html)
         self.assertIn("Microsoft Forms", html)
         self.assertIn("Customised list forms", html)
 
@@ -303,7 +305,45 @@ class CliTests(unittest.TestCase):
 
     def test_the_cli_reminds_you_the_forms_count_is_a_floor(self):
         _, out = self.run_cli(["scan", str(self.zip)])
-        self.assertIn("asking owners", out)
+        self.assertIn("only the ones a flow names", out)
+        self.assertIn("--forms-listing", out)
+
+
+class FormsListingTests(unittest.TestCase):
+    """A tenant enumeration turns the Forms floor into a real count."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="reformer_"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_a_listing_supplies_forms_no_package_names(self):
+        rows = [{"id": FORM_B, "title": "Staff survey", "owner": "someone@example.invalid"},
+                {"id": FORM_OTHER, "title": "Kit request", "ownerContext": "groups"}]
+        res = scan_forms_listing(rows, "tenant.json")
+        self.assertEqual({f.identity for f in res.of_kind("microsoft-form")}, {FORM_B, FORM_OTHER})
+        self.assertEqual(res.of_kind("microsoft-form")[0].name, "Staff survey")
+        self.assertEqual(res.of_kind("microsoft-form")[0].detail["owner"], "someone@example.invalid")
+
+    def test_a_row_with_no_id_is_skipped(self):
+        self.assertEqual(scan_forms_listing([{"title": "no id"}], "t.json").findings, [])
+
+    def test_the_report_says_the_count_is_real_once_enumerated(self):
+        res = scan_forms_listing([{"id": FORM_B, "title": "Staff survey"}], "tenant.json")
+        html = to_html(res, classify(res), ["tenant.json"], enumerated=True)
+        self.assertIn("Counted from a tenant enumeration", html)
+        self.assertIn("group", html)            # the gap that survives it
+        self.assertNotIn("is a floor, not a total", html)
+
+    def test_the_cli_stops_calling_it_a_floor_when_given_a_listing(self):
+        cap = self.tmp / "tenant.json"
+        cap.write_text(json.dumps([{"id": FORM_B, "title": "Staff survey"}]))
+        j = self.tmp / "r.json"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = cli.main(["scan", "--forms-listing", str(cap), "--json", str(j)])
+        self.assertEqual(code, 2)
+        self.assertNotIn("only the ones a flow names", buf.getvalue())
+        self.assertTrue(json.loads(j.read_text())["forms_count_is_complete"])
 
 
 class MergeTests(unittest.TestCase):

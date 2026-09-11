@@ -208,6 +208,48 @@ def _plumsail_name(path: str) -> str:
     return leaf.split("_", 1)[0] if "_" in leaf else leaf
 
 
+def scan_forms_listing(rows: list[dict], source: str) -> ScanResult:
+    """Microsoft Forms from a tenant enumeration.
+
+    There is no supported API, but there is a real one. An Entra app granted
+    the **application** permission ``Forms.Read.All`` on the Microsoft Forms
+    resource can read any user's forms, so looping every user produces a
+    near-complete inventory. It is undocumented and Microsoft has already moved
+    the host once, so treat it as something to re-verify, not to rely on.
+
+    Two gaps survive that method and both matter:
+
+    - **Group-owned forms.** The group context does not accept application
+      permissions, so those need delegated access from an account in the group.
+    - **Forms of hard-deleted users**, which are destroyed 30 days after the
+      account goes.
+
+    The supported alternative reaches user-owned forms without any of this:
+    Forms data lives in the owner's Exchange mailbox, so an eDiscovery search
+    for ``ItemClass="IPM.File.Forms"`` finds it tenant-wide. It returns blobs to
+    parse rather than a tidy list, and shares the group blind spot.
+
+    A row needs an id and a title; an owner is used when present.
+    """
+    res = ScanResult()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        fid = str(row.get("id") or row.get("Id") or row.get("formId") or "").strip()
+        title = str(row.get("title") or row.get("Title") or row.get("name") or "").strip()
+        if not fid:
+            continue
+        owner = str(row.get("owner") or row.get("ownerId") or row.get("userPrincipalName")
+                    or row.get("createdBy") or "").strip()
+        detail = {"from": "tenant-listing"}
+        if owner:
+            detail["owner"] = owner
+        if row.get("ownerContext") or row.get("owner_context"):
+            detail["owner_context"] = str(row.get("ownerContext") or row.get("owner_context"))
+        res.add(Finding("microsoft-form", fid, source, name=title or fid, detail=detail))
+    return res
+
+
 def scan_property_bags(rows: list[dict]) -> ScanResult:
     """Customised list forms from a captured property-bag reading.
 

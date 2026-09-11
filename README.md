@@ -21,7 +21,26 @@ Two traps this encodes, because both mislead people reliably:
 
 **Connector names do not mean what they look like.** `shared_plumsail` is Plumsail Documents and `shared_plumsailforms` is their cloud-hosted web forms product. Neither is a SharePoint list form, and neither tells you how many list forms a site has. reformer reports them as work to do, not as forms.
 
-**A form with nothing downstream is invisible.** A Microsoft Form is only discoverable from a package when a flow names it. One somebody made to collect information, with no flow behind it, appears in no package and no connector inventory. **Treat the Microsoft Forms count as a floor, never a total** — the rest has to come from asking owners. reformer says so in every report rather than letting the number look complete.
+**A form with nothing downstream is invisible to a package.** A Microsoft Form is only discoverable from a solution export when a flow names it. One somebody made to collect information, with no flow behind it, appears in no package and no connector inventory. So the package-derived count is a **floor**, and reformer says so in every report rather than letting the number look complete.
+
+That floor can be turned into a real number — see below.
+
+## Counting Microsoft Forms properly
+
+There is no supported API, which is usually where the conversation stops. It shouldn't. There are three routes, and they fail in different places, so the honest answer is to use more than one.
+
+**1. Enumerate the tenant (near-complete, unsupported).** The Forms web app has an internal API, and an Entra app can be granted the **application** permission `Forms.Read.All` on the Microsoft Forms resource — a real permission, listed under *APIs my organization uses*. With client credentials you can read *any* user's forms, so looping every user from Graph gives a near-complete inventory with owners. It is undocumented, Microsoft has already moved the host once, and their own guidance is that these endpoints may change without notice. Treat it as something to re-verify, not something to depend on indefinitely.
+
+**2. eDiscovery (supported, coarser).** Forms data lives in the **owner's Exchange mailbox**. A Content Search across all mailboxes filtered to `ItemClass="IPM.File.Forms"` finds it tenant-wide and is entirely supported. It returns blobs to parse rather than a tidy list, and needs eDiscovery permissions, but nothing about it can be withdrawn from under you.
+
+**3. The admin activity report (supported, not an inventory).** Reports → Usage → Forms gives per-user counts of forms created. No names, no ids. Useless as an inventory, genuinely useful as a *targeting list*: it tells you which users are worth enumerating.
+
+Two gaps survive all three, and they are worth stating to whoever asks for the number:
+
+- **Group-owned forms.** The application permission does not cover the group context, and a group's forms are not in anyone's mailbox. Reaching them needs delegated access from an account that is a member of the group.
+- **Forms of hard-deleted users**, which are destroyed 30 days after the account goes and are not recoverable.
+
+Feed the result of route 1 or 2 in with `--forms-listing` and reformer stops hedging: the report says the count came from an enumeration, and names those two remaining gaps instead.
 
 ## Use
 
@@ -29,6 +48,7 @@ Two traps this encodes, because both mislead people reliably:
 python3 -m reformer scan Solution.zip --json forms.json --html forms.html
 python3 -m reformer scan exports/            # a folder of packages
 python3 -m reformer scan --site-listing site-files.json --property-bags custom-forms.json
+python3 -m reformer scan exports/ --forms-listing tenant-forms.json
 ```
 
 Exit `0` when nothing needs doing, `2` when there are forms to decide about, `1` on a bad input. The `2` is deliberate: finding work is not a failure, but a pipeline should be able to tell it apart from finding nothing.
@@ -44,6 +64,7 @@ Exit `0` when nothing needs doing, `2` when there are forms to decide about, `1`
 **Captured listings (JSON)** — for the things no package contains. Both accept a bare list, a `{"value": [...]}` envelope, or a single object.
 
 - `--site-listing` finds Plumsail definitions under `SitePages/PlumsailForms` and InfoPath templates. Any listing works as long as each row carries a path under `ServerRelativeUrl`, `Name` or `path`.
+- `--forms-listing` takes a Microsoft Forms tenant enumeration, which is what turns the Forms count from a floor into a real one. A row needs an `id` and a `title`; an owner is used when present.
 - `--property-bags` finds customised list forms from readings of `PowerAppFormProperties` on each list's folder. This is the only reliable way to enumerate them across a tenant, and far better than asking site owners.
 
 The property bag is also *why* lists arrive broken: its value names the app in the tenant it was made in, so if a migration copies it verbatim the target list points at an app that does not exist there, and the new and edit pages open to a spinner. Clear the key, then import and publish the app, which writes a correct one.

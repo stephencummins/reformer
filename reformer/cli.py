@@ -18,7 +18,8 @@ from . import __version__
 from .classify import classify, totals
 from .package import Container
 from .report import KIND_LABELS, write
-from .scan import ScanResult, merge, scan_package, scan_property_bags, scan_site_listing
+from .scan import (ScanResult, merge, scan_forms_listing, scan_package,
+                   scan_property_bags, scan_site_listing)
 
 
 def _load_rows(path: str) -> list[dict]:
@@ -39,6 +40,7 @@ def _load_rows(path: str) -> list[dict]:
 def _scan(a: argparse.Namespace) -> int:
     results: list[ScanResult] = []
     sources: list[str] = []
+    enumerated = False
 
     for target in a.paths or []:
         p = Path(target)
@@ -63,6 +65,17 @@ def _scan(a: argparse.Namespace) -> int:
         results.append(scan_site_listing(rows, Path(path).stem))
         sources.append(Path(path).name)
         print(f"  {Path(path).name}: {len(rows)} row(s)")
+
+    for path in a.forms_listing or []:
+        try:
+            rows = _load_rows(path)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            print(f"  error: {e}", file=sys.stderr)
+            return 1
+        results.append(scan_forms_listing(rows, Path(path).name))
+        sources.append(Path(path).name)
+        enumerated = True
+        print(f"  {Path(path).name}: {len(rows)} form(s) from a tenant enumeration")
 
     for path in a.property_bags or []:
         try:
@@ -96,14 +109,15 @@ def _scan(a: argparse.Namespace) -> int:
 
     write(Path(a.json) if a.json else None,
           Path(a.html) if a.html else None,
-          res, items, sources)
+          res, items, sources, enumerated=enumerated)
     for label, path in (("json", a.json), ("html", a.html)):
         if path:
             print(f"  report ({label}): {path}")
 
-    if items:
-        print("\n  Microsoft Forms are counted only where a flow names one. Forms with nothing\n"
-              "  downstream are invisible to any scan and must come from asking owners.")
+    if items and not enumerated:
+        print("\n  Microsoft Forms here are only the ones a flow names. A form with nothing\n"
+              "  downstream is invisible to a package scan. Enumerate the tenant and pass\n"
+              "  --forms-listing to turn this count into a real one.")
     return 2 if items else 0
 
 
@@ -118,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("paths", nargs="*", help="solution export .zip files, or a folder of them")
     p.add_argument("--site-listing", action="append", metavar="JSON",
                    help="a captured listing of a site's files; finds Plumsail and InfoPath forms")
+    p.add_argument("--forms-listing", action="append", metavar="JSON",
+                   help="a Microsoft Forms tenant enumeration; without one the Forms count is only "
+                        "what packages name, which is a floor")
     p.add_argument("--property-bags", action="append", metavar="JSON",
                    help="captured PowerAppFormProperties readings; finds customised list forms")
     p.add_argument("--json", help="write the machine-readable report here")

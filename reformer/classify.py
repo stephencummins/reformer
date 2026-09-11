@@ -174,9 +174,14 @@ def _list_form(f: Finding) -> Item:
     if not f.detail.get("list_url") and f.detail.get("from") != "property-bag":
         flags.append("no list URL in the binding, so the target list cannot be inferred")
     return Item(f.kind, f.identity, f.name or f.identity, f.source, ROUTE, *_band(ROUTE),
-                "There is no automated route, but the documented manual one is minutes per form "
-                "against half a day to rebuild. Prove it on one form before committing.",
-                flags + ["target list needs identical internal column names, same language, no existing custom form"])
+                "Retargeting the package is automated; the import is not. Minutes per form against "
+                "half a day to rebuild, which is why the route is worth proving before committing.",
+                flags + [
+                    "the binding is retargeted by the migration tooling — do not hand-edit the JSON",
+                    "by hand after import: Create as New (update-existing does not work), "
+                    "delete and re-add the data source, then Publish to SharePoint, which is what binds it",
+                    "target list needs identical internal column names, same language, no existing custom form",
+                ])
 
 
 def _plumsail_form(f: Finding) -> Item:
