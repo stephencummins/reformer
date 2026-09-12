@@ -34,6 +34,20 @@ Three checks, none of which needs more than a browser:
 
 There is also a shortcut worth knowing: **the SharePoint add-in model was fully retired on 2 April 2026.** So if the forms are working today, they are SPFx — classic add-in forms stopped rendering months ago and would have been reported as broken long before any migration. Use the checks to confirm it rather than to discover it.
 
+A fourth tell, from the store or App Catalog listing itself: the SPFx product describes itself as *"web parts and extensions"* and names its **field customizers** (Data Table, Signature, Likert Scale, Lookup) and the **Form Panel customizer**. Web parts, field customizers and form-panel customizers are SPFx extension types. A classic add-in has none of them — it has iframed add-in parts.
+
+### Two different version numbers, and don't compare them
+
+This catches people out. The **app package** (`.sppkg`) is versioned on a **1.x** track — the vendor's own upgrade note talks about moving from `v1.0.4.0` to `v1.0.5.0`. The **product** is versioned on a **4.x** track in the changelog. Seeing a package at `1.1.0.0` released in 2023 against a product at `4.2.x` is not a three-year-stale install: they are different things, and the package is the smaller half.
+
+Read the installed package version in the **App Catalog → Apps for SharePoint → Version** column, not from the store listing, which tells you what the store is currently *offering*.
+
+The package is updated by **deleting it and installing the current one** from AppSource — there is no in-place upgrade. And then the part that matters here:
+
+> "re-save all the forms that you have in the latest version of Plumsail Forms designer app"
+
+because re-saving **updates the scripts on each form's page**. Old forms keep working, but their pages carry scripts stamped at save time by whichever package version saved them. Which is the same conclusion the migration reaches from the other direction: the fix is a pass through the designer, per form.
+
 ### What is actually broken
 
 Not the definition — and that is why this one confuses people. The definition really is content and really does travel:
@@ -50,7 +64,9 @@ Three consequences worth having in your head:
 - **The definition is not the association.** The form is attached per **list and content type** — the vendor's own provisioning API takes exactly those two as its arguments, and *"the form will replace a default new form in the target list"* is a write against them. So the file arriving in the target is necessary and not sufficient: something still has to associate it with the migrated list.
 - **The association is by name.** Rename the list, or land the items under a differently named content type, and the definition sits there unreferenced while the form silently reverts to the default.
 
-**Which is why the reattach is done in the designer, not in the filesystem.** Connect the designer to the *target* list, import or load the layout, and **save it once**. That single action writes both the definition and the association in the target tenant, and it is what the vendor's own support tells people to do when a form has come adrift from its list: *"import the form in the editor, and save it again."* Copying files alone does not do it, and neither does hand-editing them.
+**Which is why the reattach is done in the designer, not in the filesystem.** Connect the designer to the *target* list, import or load the layout, and **save it once**. That single action writes the definition, the association, and the scripts on the form's page, all against the target tenant's installed package. It is what the vendor's own support tells people to do when a form has come adrift from its list — *"import the form in the editor, and save it again"* — and what their upgrade documentation requires after any package change. Copying files alone does not do it, and neither does hand-editing them.
+
+Plan for it: **one designer pass per form**, and it is the same pass whether you are reattaching after a migration or re-saving after a package update. That is the work, and it is why the effort scales with the number of forms rather than being a one-off tenant-level task.
 
 ### What has to be true in the target first
 
@@ -74,7 +90,7 @@ Order matters.
 1. Migrate the **lists** that carry custom forms.
 2. **Then migrate Site Pages, including subfolders.** Separate step, separate scope. Copy the whole folder.
 3. Check the names still line up: list name and content type name must match the filenames in `PlumsailForms/`. Rename either and you have detached the form.
-4. **Reattach each form: open it in the designer against the target list and save it.** This is the step that actually binds the form to the migrated list, and it doubles as the proof that the licence, the scripting policy and the permissions are all in place — those three fail here, loudly, rather than later in front of a user.
+4. **Reattach each form: open it in the designer against the target list and save it.** Install the current app package first, so the pass stamps current scripts rather than needing a second one. This is the step that actually binds the form to the migrated list, and it doubles as the proof that the licence, the scripting policy and the permissions are all in place — those three fail here, loudly, rather than later in front of a user.
 5. Open the list's **New** form in the browser. That is the test of success — not whether the files exist.
 
 For more than about ten forms, script that reattach rather than clicking it: the provisioning package exposes `GetLayout()` to pull every layout from the source and `GenerateForms()` to write it against a target list and content type, which the vendor documents as working across lists, sites and tenants. It is the same operation the designer performs, in a loop. All three routes — content copy, designer export/import, provisioning API — assume the target list has the **same internal field names**, which it will if the list was migrated rather than rebuilt.
@@ -202,6 +218,8 @@ The facts above that come from vendor or Microsoft documentation, rather than fr
 - [Plumsail — provisioning forms programmatically](https://plumsail.com/docs/forms-sp/provision/provision.html)
 - [Plumsail — troubleshooting for SharePoint Online](https://plumsail.com/docs/forms-sp/troubleshooting/microsoft-365.html)
 - [Plumsail — modern authentication and API keys](https://plumsail.com/blog/microsoft-enforcement-actions-api-keys/)
+- [Plumsail — updating the app package, and re-saving forms afterwards](https://plumsail.com/docs/forms-sp/general/update-package.html)
+- [Plumsail — product version history (the 4.x track)](https://plumsail.com/docs/forms-sp/general/version-history.html)
 - [Plumsail community — classic add-in forms vs SPFx, and what breaks](https://community.plumsail.com/t/migrate-classic-plumsail-forms-add-in-model-to-plumsail-spfx-modern-forms-sharepoint-framework-what-breaks/20069)
 - [Plumsail community — forms no longer connected to the list, and the re-save fix](https://community.plumsail.com/t/forms-not-connected-to-list-anymore/9603)
 - [Plumsail community — lists stopped using the custom form assigned to the content type](https://community.plumsail.com/t/plumsail-suddenly-stopped-redirecting-lists-to-plumsail-forms/9299)
