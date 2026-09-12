@@ -151,7 +151,13 @@ Not native, and no workaround worth building:
 
 ### Does it migrate?
 
-Undetermined, and do not assume it does. The JSON lives in `ClientFormCustomFormatter` on the **list** content type. No migration tool documents whether it carries that property: the vendor documentation covered in the Sources below addresses views and apps and is silent on form formatting, and the PnP provisioning engine states outright that it does not handle form formatting yet.
+Undetermined for the commercial tools, and **no** for PnP. The JSON lives in `ClientFormCustomFormatter` on the **list** content type.
+
+You will find confident tables online saying every major method preserves it. Treat them carefully: they tend to cite Microsoft's form-configuration page, which establishes only *where* the JSON is stored and says nothing about any migration tool. The one row in those tables that can be checked independently is the PnP one, and it is wrong — the string `Formatter` does not appear anywhere in the PnP provisioning schema, in either the current `2022-09` version or `vNext`. There is no element or attribute for it, so a site template has nowhere to put it. That is also why the PnP community's own guidance on this property is a hand-rolled extract-and-reapply script rather than a template.
+
+Worth understanding the asymmetry, because it explains why people report the opposite: **column** formatting often does survive, because field definitions travel as raw SharePoint field schema XML and `CustomFormatter` rides along inside that passthrough blob. Content types are carried as structured elements, so a property with no element is simply dropped. Same feature family, two different storage locations, two different outcomes.
+
+For ShareGate, AvePoint and Microsoft's own cross-tenant service the answer is genuinely unknown: none of them documents the property either way, and advice naming specific checkboxes to tick should be matched against the product's actual options before you rely on it.
 
 Which does not matter much, because unlike every other form in this document **the definition is a text file you can own**. Read it out before the wave:
 
@@ -289,6 +295,7 @@ The facts above that come from vendor or Microsoft documentation, rather than fr
 - [Microsoft — SharePoint Online CSP enforcement dates and guidance](https://techcommunity.microsoft.com/blog/spblog/sharepoint-online-content-security-policy-csp-enforcement-dates-and-guidance/4472662)
 - [Microsoft — configuring the list form with header, footer and body sections](https://learn.microsoft.com/en-us/sharepoint/dev/declarative-customization/list-form-configuration)
 - [Microsoft — conditional formulas to show or hide columns, and the unsupported column types](https://learn.microsoft.com/en-us/sharepoint/dev/declarative-customization/list-form-conditional-show-hide)
-- [PnP — reading and writing `ClientFormCustomFormatter`, and the provisioning engine's gap](https://pnp.github.io/blog/post/updating-your-list-forms-using-your-provisioning-tool-of-choice/)
+- [PnP — reading and writing `ClientFormCustomFormatter` with a hand-rolled script](https://pnp.github.io/blog/post/updating-your-list-forms-using-your-provisioning-tool-of-choice/)
+- [PnP provisioning schema — no `Formatter` element in `2022-09` or `vNext`](https://github.com/pnp/PnP-Provisioning-Schema/tree/master/PnP.ProvisioningSchema)
 - [ShareGate — Migrate FAQ (views and apps; silent on form formatting)](https://help.sharegate.com/en/articles/10236131-sharegate-migrate-faq)
 - [Microsoft — IDCRL legacy authentication retirement](https://techcommunity.microsoft.com/blog/microsoftmissioncriticalblog/legacy-sharepoint-authentication-idcrl-is-retiring-%E2%80%94-what-to-do-before-may-1-202/4499131)
