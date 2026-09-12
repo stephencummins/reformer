@@ -116,6 +116,68 @@ That last row is worth expecting: many of these forms drive flows through the pl
 - **Classic add-in forms are already gone.** The SharePoint add-in model was retired on **2 April 2026**. If any forms are the classic add-in flavour rather than SPFx, there is nothing to move: they go to SPFx or they are rebuilt. Check which app is installed in the source App Catalog — the form URL alone does not tell you which flavour you have.
 - **Legacy-auth API keys are dead.** Microsoft's IDCRL retirement blocked legacy SharePoint logins from mid-February 2026, allowed an admin extension to 30 April 2026, and completed on 1 May 2026. Any vendor key created with the old "SharePoint custom credentials" pattern stopped working then. Do not recreate that pattern in the target: it also required MFA to be disabled on a service account, which will not pass a new tenant's baseline. Move to delegated or app-only auth.
 
+## The option reformer doesn't offer — rebuild as a native list form
+
+reformer classifies what exists. It has no way to know that a form *could* be something simpler, so it never proposes this. Worth considering for either of the two treatments above, because it is the only option that removes the form from the migration problem instead of moving it.
+
+A native list form is configured with JSON: a header, a footer, and a body of named sections. No app package, no licence, no vendor host to allow through a content security policy, no per-form designer pass. That is the whole argument — everything the two sections above spend their length on stops applying.
+
+### When it is the right call
+
+When the vendor form is doing layout rather than logic. Section headings, a branded header, three fields to a row, required markers, fields that appear only when another answer makes them relevant — all of that is native now, and a form built out of it costs nothing at cutover.
+
+### What you get, and what you don't
+
+Native:
+
+- **A branded header** — the header formatter takes arbitrary elements and styles, so a coloured band with a logo and a title is a few lines.
+- **Grouped sections with headings** — the body formatter is `sections`, each with a `displayname` and a list of fields.
+- **A multi-column layout.** Worth knowing because it is easy to assume otherwise: *"once the body is customized with one or more sections, the list or library form will switch to a multi-column layout."* You do not choose the column count, but you are not stuck with a single stack either.
+- **Required markers, list validation, and read-only fields** via `fieldsettings`.
+- **Conditional fields** — `=if([$Column] == 'Value', 'true', 'false')` per column, evaluated against the form as the user fills it in.
+
+Not native, and no workaround worth building:
+
+- **A wizard.** There is no step, page, Next/Back or per-step validation anywhere in the schema — `sections` and `fieldsettings` is the entire surface, and the body takes no clickable elements at all. You can fake the *appearance* by hiding one section's fields behind a helper "step" column, but you cannot fake the part that matters: a wizard's job is refusing to advance until the current step validates, and conditional visibility gates nothing. The user can skip ahead or save from step one. Take the scroll instead.
+- **Cascading dropdowns.** One choice narrowing the next is not a native behaviour.
+- **A value computed live in front of the user.** A calculated column can compose one — a document reference built from its parts, say — but only after save, not as they type.
+
+### What has to be true first
+
+1. **The form JSON is stored on the list content type**, so the content type must allow edits. Content types inherited from the Content Type Hub are **read-only by default**: set the content type to Edit mode, apply the formatting, set it back. This is the one that catches people, because nothing about the symptom points at the hub.
+2. **The controlling columns are types conditional formulas support.** Not supported as a condition source: multi-select choice, multi-select lookup, multi-select person, calculated, currency, location, managed metadata, and the time part of a date. A single-select choice, number, date or yes/no column is safe.
+3. **Required and conditional do not mix well.** Microsoft's own guidance for a conditional formula that will not work is to remove the column's required setting first, apply the formula, then reinstate it. Expect to do that, and expect the ordering to matter.
+4. **Count the lookup columns.** Twelve lookups per query is the threshold, and a form with a dozen or more reference dropdowns crosses it. Choice columns do not count against it, and on a form whose dropdowns are fixed code lists they are the better modelling choice anyway.
+
+### Does it migrate?
+
+Undetermined, and do not assume it does. The JSON lives in `ClientFormCustomFormatter` on the **list** content type. No migration tool documents whether it carries that property: the vendor documentation covered in the Sources below addresses views and apps and is silent on form formatting, and the PnP provisioning engine states outright that it does not handle form formatting yet.
+
+Which does not matter much, because unlike every other form in this document **the definition is a text file you can own**. Read it out before the wave:
+
+```powershell
+$ct = Get-PnPContentType -List $listName
+$ct.ClientFormCustomFormatter | Out-File "form.json"
+```
+
+and put it back after:
+
+```powershell
+$ct.ClientFormCustomFormatter = $json
+$ct.Update(0)
+$clientContext.ExecuteQuery()
+```
+
+So the worst case is a scripted reapply per list — not a licence negotiation, not a designer pass per form. Settle it with one test rather than a support ticket: export the JSON, migrate a single list to a target, read the property off the arriving content type, and diff.
+
+**Conditional show/hide formulas are stored separately, per field**, not in the form JSON. So a form that leans on them has two things to verify rather than one — another reason to prefer plain sections over a simulated wizard.
+
+### Why it still doesn't work
+
+Mostly because the form was rebuilt but the data model was not. If a form's second half is the same handful of fields repeated once per delivery stage, that is fifty-odd columns on one item and six chances to mis-key the same thing. It wants to be a parent item with a child list of stages, one row each. Do that and the form is small enough that none of the limitations above bite, the wizard has nothing left to page through, and the stages become reportable — every deliverable due next month, across every parent, is a view rather than an export.
+
+Rebuilding the form and keeping the fifty columns gets you the same form with fewer features. The saving is in the model.
+
 ## Move via the documented route — customised list forms
 
 ### What is actually broken
@@ -225,4 +287,8 @@ The facts above that come from vendor or Microsoft documentation, rather than fr
 - [Plumsail community — lists stopped using the custom form assigned to the content type](https://community.plumsail.com/t/plumsail-suddenly-stopped-redirecting-lists-to-plumsail-forms/9299)
 - [Microsoft — SharePoint Add-In retirement, 2 April 2026](https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/retirement-announcement-for-add-ins)
 - [Microsoft — SharePoint Online CSP enforcement dates and guidance](https://techcommunity.microsoft.com/blog/spblog/sharepoint-online-content-security-policy-csp-enforcement-dates-and-guidance/4472662)
+- [Microsoft — configuring the list form with header, footer and body sections](https://learn.microsoft.com/en-us/sharepoint/dev/declarative-customization/list-form-configuration)
+- [Microsoft — conditional formulas to show or hide columns, and the unsupported column types](https://learn.microsoft.com/en-us/sharepoint/dev/declarative-customization/list-form-conditional-show-hide)
+- [PnP — reading and writing `ClientFormCustomFormatter`, and the provisioning engine's gap](https://pnp.github.io/blog/post/updating-your-list-forms-using-your-provisioning-tool-of-choice/)
+- [ShareGate — Migrate FAQ (views and apps; silent on form formatting)](https://help.sharegate.com/en/articles/10236131-sharegate-migrate-faq)
 - [Microsoft — IDCRL legacy authentication retirement](https://techcommunity.microsoft.com/blog/microsoftmissioncriticalblog/legacy-sharepoint-authentication-idcrl-is-retiring-%E2%80%94-what-to-do-before-may-1-202/4499131)
