@@ -1,0 +1,210 @@
+# What the engineer actually does
+
+reformer says what exists, what each form needs and what it costs. This says how to do it.
+
+One section per treatment, in the same words the report uses. Each one is in the same shape: **what is actually broken**, **what has to be true first**, **the steps**, **how to know it worked**, and **why it still doesn't**. The last of those is the part worth reading first, because every one of these fails silently. Nothing errors. The list opens, the flow sits there, and the form is the default one.
+
+## Do this before the source tenant goes
+
+Regardless of what you decide later, and first:
+
+- **Export every Microsoft Form's responses to Excel** and save the workbook in the owning site. Responses do not migrate by any route. It costs minutes and it is the only artefact guaranteed to survive.
+- **Export the Plumsail layouts** from the designer, per form, even though a content copy should carry them. Belt and braces, and free.
+- **Export each customised list form** as a package with **Create as New**.
+- **Capture the inventories** the scan needs from the source: the site listing, the property-bag readings, and a Microsoft Forms enumeration.
+- **Decommission no account until its forms are dealt with.** A form belonging to a deleted account is destroyed 30 days later and Microsoft states it is not recoverable.
+
+## Travels with the site content — Plumsail list forms
+
+### First: which product are you actually holding
+
+Three different things get called "a Plumsail form", and they remediate differently. Settle this before anything else, because two of the three have no route at all.
+
+| Flavour | How to recognise it | Route |
+|---|---|---|
+| **Forms Designer** (the older, separate product) | Schema files are **`.xfds`**, root element `<FormsDesigner>` | No migration into modern Forms. Rebuild |
+| **Plumsail Forms, classic add-in model** | Installed as a **SharePoint add-in**; forms render at `/SitePages/PlumsailForms/...` in an iframe | Retired. Move to SPFx or rebuild |
+| **Plumsail Forms, SPFx** | **SPFx package in the tenant App Catalog**; forms render on SharePoint's own form pages (`/_layouts/15/SPListForm.aspx`) | Migrates. The rest of this section |
+
+Three checks, none of which needs more than a browser:
+
+1. **Open a list's New form and look at the URL.** `/_layouts/15/...` is SPFx. `/SitePages/PlumsailForms/...` is the classic add-in.
+2. **Look at the schema file extension** in `Site Pages/PlumsailForms/`. `.designer.json` is the modern product on SharePoint Online. `.xfds` is Forms Designer or on-premises.
+3. **Look at where the app is installed** — tenant App Catalog (SPFx) or the site's own add-ins (classic). The form URL alone does not tell you, so check the catalogue rather than inferring.
+
+There is also a shortcut worth knowing: **the SharePoint add-in model was fully retired on 2 April 2026.** So if the forms are working today, they are SPFx — classic add-in forms stopped rendering months ago and would have been reported as broken long before any migration. Use the checks to confirm it rather than to discover it.
+
+### What is actually broken
+
+Not the definition — and that is why this one confuses people. The definition really is content and really does travel:
+
+```
+Site Pages/PlumsailForms/{ListName}_{ContentTypeName}_{FormType}.designer.json
+```
+
+(`.xfds` on 2019/SE.) What does not travel is everything around it. The definition is inert on its own: it is *associated* with a list, *rendered* by a tenant-level SPFx component, under a tenant-level script policy, against a tenant-bound licence. None of those four are content, so none of them come with the site. The file arrives and the form does nothing.
+
+Three consequences worth having in your head:
+
+- **The definitions are in Site Pages, not in the list.** If the migration scope is "lists and libraries", the forms are not in scope. This is the single most common cause of "the Plumsail forms didn't come over".
+- **The definition is not the association.** The form is attached per **list and content type** — the vendor's own provisioning API takes exactly those two as its arguments, and *"the form will replace a default new form in the target list"* is a write against them. So the file arriving in the target is necessary and not sufficient: something still has to associate it with the migrated list.
+- **The association is by name.** Rename the list, or land the items under a differently named content type, and the definition sits there unreferenced while the form silently reverts to the default.
+
+**Which is why the reattach is done in the designer, not in the filesystem.** Connect the designer to the *target* list, import or load the layout, and **save it once**. That single action writes both the definition and the association in the target tenant, and it is what the vendor's own support tells people to do when a form has come adrift from its list: *"import the form in the editor, and save it again."* Copying files alone does not do it, and neither does hand-editing them.
+
+### What has to be true in the target first
+
+All five. Any one of them missing gives you the default form or a script error, with no clue which.
+
+1. **The SPFx package is in the target App Catalog, deployed tenant-wide.** Needs a SharePoint administrator. It is not a site-level "add an app" step on the modern product.
+2. **Custom scripting is enabled on the destination site.** Off by default on group-connected sites:
+   ```powershell
+   Connect-SPOService -Url https://<org>-admin.sharepoint.com
+   Set-SPOSite <site URL> -DenyAddAndCustomizePages 0
+   ```
+   Symptom if missed: *"custom web part cannot be created"* during the copy, and *"Scripting capabilities disabled for this site"* when the designer tries to save.
+3. **The Plumsail hosts are trusted script sources.** SharePoint Online has enforced CSP since 1 March 2026, so a new tenant blocks them until told otherwise. Admin Center → **Advanced → Script sources**, add `https://*.plumsail.com` and `https://*.spform.com`. Symptom if missed: *"Something went wrong (script error)"*.
+4. **The licence covers the target domain.** The subscription is issued per tenant and bound to the `*.sharepoint.com` domain named at checkout, and there is no published transfer procedure. Two things to settle with the vendor early, because the answer has a lead time and no documentation: whether the existing subscription is re-bound or a new one issued, and **whether both domains can be licensed at once across the cutover window** — that overlap is the thing you actually need. After activation, clear the browser cache; the licence is cached client-side and a stale one still reports as expired.
+5. **Whoever edits forms has Full Control on the list *and* on the Site Pages library.** The designer writes to both.
+
+### The steps
+
+Order matters.
+
+1. Migrate the **lists** that carry custom forms.
+2. **Then migrate Site Pages, including subfolders.** Separate step, separate scope. Copy the whole folder.
+3. Check the names still line up: list name and content type name must match the filenames in `PlumsailForms/`. Rename either and you have detached the form.
+4. **Reattach each form: open it in the designer against the target list and save it.** This is the step that actually binds the form to the migrated list, and it doubles as the proof that the licence, the scripting policy and the permissions are all in place — those three fail here, loudly, rather than later in front of a user.
+5. Open the list's **New** form in the browser. That is the test of success — not whether the files exist.
+
+For more than about ten forms, script that reattach rather than clicking it: the provisioning package exposes `GetLayout()` to pull every layout from the source and `GenerateForms()` to write it against a target list and content type, which the vendor documents as working across lists, sites and tenants. It is the same operation the designer performs, in a loop. All three routes — content copy, designer export/import, provisioning API — assume the target list has the **same internal field names**, which it will if the list was migrated rather than rebuilt.
+
+### Why it still doesn't work
+
+Work down this list. It is ordered by how often it is the answer.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Default SharePoint form, no error | Site Pages never migrated | Copy `Site Pages/PlumsailForms/` |
+| Default form, definition file is present | Never reattached to the migrated list, or the list or content type was renamed | Open the form in the designer against the target list and save it |
+| Default form on every list in the tenant | App not deployed tenant-wide in the target | Deploy the SPFx package in the App Catalog |
+| "Something went wrong (script error)" | CSP blocking the vendor hosts | Add both hosts to Trusted Script Sources |
+| Form renders, says trial or expired | Licence bound to the old domain, or cached | Re-bind the subscription; clear the browser cache |
+| Designer cannot save | Custom scripting denied, or not Full Control on Site Pages | `-DenyAddAndCustomizePages 0`; fix permissions |
+| Form renders, flow behind it never fires | The flow used the ordinary SharePoint trigger and a helper column that did not survive | Re-point the flow; restore the helper columns |
+
+That last row is worth expecting: many of these forms drive flows through the plain **When an item is created or modified** trigger and a pair of helper columns, not through a vendor connector at all. Those re-point like any other SharePoint flow — and the helper columns have to survive the list migration, which nobody checks because they look like ordinary columns.
+
+### Audit the source before blaming the migration
+
+- **Classic add-in forms are already gone.** The SharePoint add-in model was retired on **2 April 2026**. If any forms are the classic add-in flavour rather than SPFx, there is nothing to move: they go to SPFx or they are rebuilt. Check which app is installed in the source App Catalog — the form URL alone does not tell you which flavour you have.
+- **Legacy-auth API keys are dead.** Microsoft's IDCRL retirement blocked legacy SharePoint logins from mid-February 2026, allowed an admin extension to 30 April 2026, and completed on 1 May 2026. Any vendor key created with the old "SharePoint custom credentials" pattern stopped working then. Do not recreate that pattern in the target: it also required MFA to be disabled on a service account, which will not pass a new tenant's baseline. Move to delegated or app-only auth.
+
+## Move via the documented route — customised list forms
+
+### What is actually broken
+
+The binding, and only the binding. A customised list form is a canvas app whose association with the list is recorded in the list folder's property bag under `PowerAppFormProperties` — and that value names an app **in the tenant it was made in**. Copy it verbatim and the target list points at an app that does not exist, so `new.aspx` and `edit.aspx` open to a spinner, an error or a blank frame while the list data looks perfect.
+
+There is no automated route. The vendor of the platform says so plainly: *"there's currently no automated method in Power Apps to copy a form from one environment to another."* There is a documented manual one, and it is minutes per form against half a day to rebuild, which is the whole reason to prove it on one form before committing to rebuilds.
+
+### What has to be true on the target list
+
+- **The same internal column names.** Display names can differ; internal names cannot be changed after creation.
+- **The same site language.** Cross-language moves are not supported.
+- **No existing custom form.**
+
+### Route A — the package route
+
+1. Source list: **Integrate → Power Apps → Customize forms**, then in Studio **File → Export package**, choosing **Create as New**.
+2. Unzip. In `Microsoft.PowerApps/apps/<guid>/`, replace the site URL, the list URL and the list GUID in all three places: `dataSources`, `dataSets` and the `embeddedApp` block. The same identifiers recur inside the `.msapp`, which is itself a zip.
+3. Re-zip preserving the exact hierarchy. Zip the *contents*, not the containing folder — the most common failure of the whole route.
+4. Target: **Import canvas app**, **Create as New**. "Update existing" does not work for forms.
+5. Open the app, **delete and re-add the SharePoint data source**, save.
+6. **File → Settings → Publish to SharePoint.** That publish is what binds the app to the list. Skipping it is why forms import cleanly and never appear.
+
+Step 2 is hand surgery, and it is where the mistakes are. Retargeting the package with tooling removes it; hand-editing the JSON at scale does not survive contact with 70 forms.
+
+### Route B — Copy Code
+
+Create a fresh custom form on the target list, open source and target in Studio side by side, select all controls in the source and paste them into the target. It sidesteps the JSON entirely. Slower per form, far fewer mystery failures. **Use it as the fallback for anything Route A rejects**, rather than jumping to a rebuild.
+
+### Clearing the stale binding
+
+Remove the key, which restores the built-in form, then import and publish the real app, which writes a correct value:
+
+```powershell
+Get-PnPPropertyBag         -Folder /Lists/<ListName> -Key PowerAppFormProperties
+Remove-PnPPropertyBagValue -Folder /Lists/<ListName> -Key PowerAppFormProperties
+```
+
+Find out how the migration tool's "customized list forms" copy option is configured **before the first wave**. It decides whether every custom-form list in the tenant arrives broken or clean, and it is one setting.
+
+### One incompatibility to design around
+
+A customised form cannot be shared separately — access is inherited from the list. **Users granted permission to specific items only do not get access to the customised form at all.** So a list must not have both item-level permissions and a Power Apps custom form. That matters when converting a Microsoft Form to a list, because item-level permissions are the right answer for submitter privacy, and it is a reason to keep the built-in form on a converted list.
+
+## Convert to a SharePoint list — Microsoft Forms with a process behind them
+
+### What is actually broken
+
+Everything except the questions. Ownership cannot transfer between tenants at all: the delegate mechanism only works for an account disabled *within* the same tenant. Responses do not travel by any route. So the question is never "how do we move it" — it is "does this become a list, or get recreated and re-pointed".
+
+Anything with a flow, an approval or a record behind it wants to be a **list**, because a list migrates like any other content and stops being a migration problem at all. Do the conversion in the **source** tenant, before the wave, so the conversion travels with everything else.
+
+The shape of it: a list with a column per question, item-level permissions so submitters see only their own items, the built-in form as the entry screen, and the flow re-pointed from the Forms trigger to **When an item is created**.
+
+## Recreate as a Form — the ones that must stay forms
+
+For anonymous or external respondents, and for quizzes.
+
+1. Use **Share as a template** to create the copy. This carries questions, sections, **branching**, theme and settings. It does **not** carry responses.
+2. Give ownership to a **Microsoft 365 group**, not a person, so the next leaver does not repeat this exercise.
+3. **Re-check the response settings.** Duplicating across an organisation boundary resets who is allowed to respond — anything you had locked down is now open.
+4. Re-capture the forms inventory and re-point the flows (below).
+5. **Fix every embedded link.** Pages, Teams tabs, email signatures, printed QR codes. The form id is new, so all of them are dead, and none of them report it.
+
+Two things to test rather than assume, because neither is documented: **file-upload questions** and **collaborators**. One experiment each, before the first wave.
+
+One environmental caveat: where the target tenant runs session controls in front of Microsoft 365, template duplication and the ownership-delegate page are both documented as breaking — users get a loading screen forever. Get a bypass agreed for the migration window before the first attempt, not during it.
+
+### Re-pointing the flows
+
+A flow names a form in **two** places — the `form_id` on the *When a new response is submitted* trigger and on the *Get response details* action — and then again in every expression that reads an answer, by question id. Recreating the form changes all of them.
+
+**The flow does not error. It stops firing.** There is no failed run to notice, because the trigger never fires, so nothing appears in the run history and no alert goes off. Whoever owns the process finds out when someone asks why they never got the thing.
+
+The form must be recreated, and the new inventory captured, **before** the solution package is imported, because the re-point resolves against that inventory.
+
+## Investigate — Plumsail connectors
+
+These are not SharePoint list forms and say nothing about how many list forms exist. `shared_plumsail` is the document-generation product and `shared_plumsailforms` is the cloud-hosted public web forms product. Two jobs, neither of them a form:
+
+- **Re-authenticate every connection.** Connections never cross tenants.
+- **Migrate the authentication method** if any connection still uses the retired custom-credentials pattern (see above). Delegated or app-only.
+
+## Knowing the job is done
+
+File counts prove nothing here — every one of these failures leaves the files in place. Verify by opening the thing a person uses:
+
+- Each migrated list's **New** form opens the custom form, not the default one.
+- One form **saved** from the designer in the target, which exercises licence, scripting policy and permissions together.
+- Each re-pointed flow has a **successful run in the target**, triggered by a real submission rather than a manual test.
+- The forms inventory re-captured from the target and diffed against the source, so anything not recreated is named rather than assumed.
+- Re-capture the target's site listing and property-bag readings and run the scan again. Forms that were remediated should no longer appear; anything still listed is either missed or was never in scope.
+
+## Sources
+
+The facts above that come from vendor or Microsoft documentation, rather than from the scan:
+
+- [Plumsail — form schema storage and file naming](https://plumsail.com/docs/forms-sp/how-to/form-versions.html)
+- [Plumsail — migrating lists with custom forms between sites and tenants](https://plumsail.com/blog/sharegate-migrate/)
+- [Plumsail — provisioning forms programmatically](https://plumsail.com/docs/forms-sp/provision/provision.html)
+- [Plumsail — troubleshooting for SharePoint Online](https://plumsail.com/docs/forms-sp/troubleshooting/microsoft-365.html)
+- [Plumsail — modern authentication and API keys](https://plumsail.com/blog/microsoft-enforcement-actions-api-keys/)
+- [Plumsail community — classic add-in forms vs SPFx, and what breaks](https://community.plumsail.com/t/migrate-classic-plumsail-forms-add-in-model-to-plumsail-spfx-modern-forms-sharepoint-framework-what-breaks/20069)
+- [Plumsail community — forms no longer connected to the list, and the re-save fix](https://community.plumsail.com/t/forms-not-connected-to-list-anymore/9603)
+- [Plumsail community — lists stopped using the custom form assigned to the content type](https://community.plumsail.com/t/plumsail-suddenly-stopped-redirecting-lists-to-plumsail-forms/9299)
+- [Microsoft — SharePoint Add-In retirement, 2 April 2026](https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/retirement-announcement-for-add-ins)
+- [Microsoft — SharePoint Online CSP enforcement dates and guidance](https://techcommunity.microsoft.com/blog/spblog/sharepoint-online-content-security-policy-csp-enforcement-dates-and-guidance/4472662)
+- [Microsoft — IDCRL legacy authentication retirement](https://techcommunity.microsoft.com/blog/microsoftmissioncriticalblog/legacy-sharepoint-authentication-idcrl-is-retiring-%E2%80%94-what-to-do-before-may-1-202/4499131)

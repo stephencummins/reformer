@@ -8,6 +8,8 @@ reformer inventories what is actually there, says what each form needs, and puts
 
 It only reads. It never touches a tenant and never modifies a package.
 
+**For how to actually fix them, see [REMEDIATION.md](REMEDIATION.md)** — the steps per treatment, what has to be true in the target first, and why each one fails silently. This README is what the tool finds and why; that one is what the engineer does.
+
 ## The three things
 
 | Called | What it is | Where the definition lives | Does it move? |
