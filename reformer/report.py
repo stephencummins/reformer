@@ -17,7 +17,6 @@ KIND_LABELS = {
     "microsoft-form": "Microsoft Forms",
     "list-form": "Customised list forms",
     "plumsail-form": "Plumsail list forms",
-    "infopath": "InfoPath forms",
     "plumsail-connector": "Plumsail connectors",
     "canvas-app": "Canvas apps",
 }

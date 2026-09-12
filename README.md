@@ -2,20 +2,21 @@
 
 Find the forms a Microsoft 365 tenant move will break, and say what each one costs to fix.
 
-Four unrelated technologies get called "a form", and each one breaks differently when a tenant changes. None of them break loudly. The solution imports, the migration report says green, and the process is dead because the screen a person types into no longer exists or no longer points at anything.
+Three unrelated technologies get called "a form", and each one breaks differently when a tenant changes. None of them break loudly. The solution imports, the migration report says green, and the process is dead because the screen a person types into no longer exists or no longer points at anything.
 
 reformer inventories what is actually there, says what each form needs, and puts a number behind it.
 
 It only reads. It never touches a tenant and never modifies a package.
 
-## The four things
+## The three things
 
 | Called | What it is | Where the definition lives | Does it move? |
 |---|---|---|---|
 | A Microsoft Form | A form on the Forms service, owned by a person | The service, tied to the owner's account | **No.** No export, no supported API, no cross-tenant ownership transfer |
 | A custom form | A canvas app bound to one SharePoint list | The Power Platform environment, bound via the list's property bag | Only by hand. Microsoft: *"there's currently no automated method"* |
 | A Plumsail form | An SPFx form on a SharePoint list | **Files in the site**, under `Site Pages/PlumsailForms` | **Yes** — it is content, so a content migration carries it |
-| An InfoPath form | Retired SharePoint form technology | The site | No. Rebuild |
+
+InfoPath was a fourth. reformer does not look for it: there is none to find, and a `.xsn` or `.xsf` template in a site listing is a row nobody has to act on. It is ignored on purpose and a test holds that, so it reads as a decision rather than an omission.
 
 Two traps this encodes, because both mislead people reliably:
 
@@ -63,7 +64,7 @@ Exit `0` when nothing needs doing, `2` when there are forms to decide about, `1`
 
 **Captured listings (JSON)** — for the things no package contains. Both accept a bare list, a `{"value": [...]}` envelope, or a single object.
 
-- `--site-listing` finds Plumsail definitions under `SitePages/PlumsailForms` and InfoPath templates. Any listing works as long as each row carries a path under `ServerRelativeUrl`, `Name` or `path`.
+- `--site-listing` finds Plumsail definitions under `SitePages/PlumsailForms`. Any listing works as long as each row carries a path under `ServerRelativeUrl`, `Name` or `path`.
 - `--forms-listing` takes a Microsoft Forms tenant enumeration, which is what turns the Forms count from a floor into a real one. A row needs an `id` and a `title`; an owner is used when present.
 - `--property-bags` finds customised list forms from readings of `PowerAppFormProperties` on each list's folder. This is the only reliable way to enumerate them across a tenant, and far better than asking site owners.
 
@@ -81,7 +82,9 @@ Each row carries a treatment, an effort band and what to watch for:
 | Recreate as a Form, owned by a group | Nothing downstream depends on it | 1–4h |
 | Move via the documented route | A customised list form that works and is in use | 15m–1h |
 | Travels with the site content | A Plumsail list form | 0–30m |
-| Rebuild | InfoPath, or the route failed | 4–8h |
+| Rebuild | The documented route failed on a customised list form | 4–8h |
+
+Nothing emits the rebuild row: it is the fallback a customised list form falls to when the documented route fails on it, which is a judgement made on the day. It is in the table because it is the figure the route is argued against.
 
 Bands, not averages. The spread within a kind is real and driven by how much flow sits behind the form. The custom-form line is the one worth arguing about: minutes to move against half a day to rebuild is the whole case for proving the route on one form before committing to rebuilds.
 

@@ -1,4 +1,4 @@
-"""Finding the four different things people call "a form".
+"""Finding the three different things people call "a form".
 
 They have almost nothing in common, so each is recognised by its own evidence:
 
@@ -12,8 +12,10 @@ They have almost nothing in common, so each is recognised by its own evidence:
   list id and the list URL.
 - **A Plumsail list form** is not in the package at all: its definition is a
   file in the site, so it is found from a captured site listing instead.
-- **An InfoPath form** is a retired technology still lurking in older sites,
-  recognised by its template files.
+
+InfoPath was a fourth and is not recognised here. There is none to find, so
+its template files would only be rows nobody has to act on: a ``.xsn`` or
+``.xsf`` in a site listing is ignored on purpose, and a test holds that.
 
 The connector names are a trap worth stating in code as well as in the
 documentation: ``shared_plumsail`` is Plumsail Documents and
@@ -37,14 +39,13 @@ SHAREPOINT_FORM_APP = "sharepointformapp"
 
 QUESTION_RE = re.compile(r"(?<![A-Za-z0-9])r[0-9a-f]{32}(?![A-Za-z0-9])")
 GUID_RE = re.compile(r"^\{?[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$")
-INFOPATH_SUFFIXES = (".xsn", ".xsf")
 
 
 @dataclass
 class Finding:
     """One thing found, and where. ``kind`` decides how it is treated later."""
 
-    kind: str                 # microsoft-form | list-form | plumsail-form | plumsail-connector | infopath | canvas-app
+    kind: str                 # microsoft-form | list-form | plumsail-form | plumsail-connector | canvas-app
     identity: str             # the id or path that names it
     source: str               # the member or file it was found in
     name: str = ""            # a human label where one is available
@@ -170,7 +171,7 @@ def _list_name_from(list_url: str) -> str:
 
 
 def scan_site_listing(rows: list[dict], site: str) -> ScanResult:
-    """Plumsail and InfoPath forms from a captured listing of a site's files.
+    """Plumsail list forms from a captured listing of a site's files.
 
     Plumsail keeps each SharePoint form as a file under
     ``Site Pages/PlumsailForms``, named for the list and form type it serves.
@@ -192,8 +193,6 @@ def scan_site_listing(rows: list[dict], site: str) -> ScanResult:
         low = path.lower()
         if "plumsailforms/" in low and low.endswith(".json"):
             res.add(Finding("plumsail-form", path, site, name=_plumsail_name(path)))
-        elif low.endswith(INFOPATH_SUFFIXES):
-            res.add(Finding("infopath", path, site, name=path.rsplit("/", 1)[-1]))
     return res
 
 

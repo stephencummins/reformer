@@ -14,7 +14,6 @@ from preference:
   route before committing to rebuilds.
 - A **Plumsail list form** is a file in the site, so the content migration
   carries it. The work is licensing and verification, not moving.
-- **InfoPath** is retired. There is nothing to move it with.
 
 Effort is given as a band, not a number. The bands are what a competent person
 takes, and the estimate is per form including its flow, which is usually the
@@ -41,7 +40,8 @@ BANDS = {
     RECREATE: (1.0, 4.0),
     ROUTE: (0.25, 1.0),
     CONTENT: (0.0, 0.5),
-    REBUILD: (4.0, 8.0),
+    REBUILD: (4.0, 8.0),   # nothing emits this: it is the fallback figure the
+                           # customised-list-form argument is made against
     RETIRE: (0.25, 0.5),
     INVESTIGATE: (0.5, 2.0),
 }
@@ -129,11 +129,6 @@ def classify(res: ScanResult, drives_a_process: bool | None = None) -> list[Item
             items.append(_list_form(f))
         elif f.kind == "plumsail-form":
             items.append(_plumsail_form(f))
-        elif f.kind == "infopath":
-            items.append(Item(
-                f.kind, f.identity, f.name, f.source, REBUILD, *_band(REBUILD),
-                "InfoPath is retired and has no migration path. Rebuild as a list form or a list.",
-            ))
         elif f.kind == "plumsail-connector":
             items.append(Item(
                 f.kind, f.identity, f.name, f.source, INVESTIGATE, *_band(INVESTIGATE),

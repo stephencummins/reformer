@@ -131,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("scan", help="inventory forms from solution packages and captured listings")
     p.add_argument("paths", nargs="*", help="solution export .zip files, or a folder of them")
     p.add_argument("--site-listing", action="append", metavar="JSON",
-                   help="a captured listing of a site's files; finds Plumsail and InfoPath forms")
+                   help="a captured listing of a site's files; finds Plumsail list forms")
     p.add_argument("--forms-listing", action="append", metavar="JSON",
                    help="a Microsoft Forms tenant enumeration; without one the Forms count is only "
                         "what packages name, which is a floor")

@@ -156,13 +156,20 @@ class ScanTests(unittest.TestCase):
 class CaptureTests(unittest.TestCase):
     def test_site_listing_finds_plumsail_definitions(self):
         rows = [{"ServerRelativeUrl": "/sites/Example/SitePages/PlumsailForms/Travel_Item_New.designer.json"},
-                {"ServerRelativeUrl": "/sites/Example/SitePages/Home.aspx"},
-                {"ServerRelativeUrl": "/sites/Example/Forms/Legacy.xsn"}]
+                {"ServerRelativeUrl": "/sites/Example/SitePages/Home.aspx"}]
         res = scan_site_listing(rows, "Example")
         kinds = {f.kind for f in res.findings}
-        self.assertEqual(kinds, {"plumsail-form", "infopath"})
+        self.assertEqual(kinds, {"plumsail-form"})
         plum = res.of_kind("plumsail-form")[0]
         self.assertEqual(plum.name, "Travel")   # the list the definition serves
+
+    def test_infopath_templates_are_ignored(self):
+        """There is no InfoPath to find, so a template file is not a row to act
+        on. Reporting one would only add work nobody has to do."""
+        rows = [{"ServerRelativeUrl": "/sites/Example/Forms/Legacy.xsn"},
+                {"ServerRelativeUrl": "/sites/Example/Forms/manifest.xsf"}]
+        res = scan_site_listing(rows, "Example")
+        self.assertEqual(res.findings, [])
 
     def test_property_bags_find_customised_forms(self):
         rows = [{"site": "https://oldtenant.sharepoint.com/sites/Example", "list": "Travel Requests",
