@@ -23,14 +23,14 @@ Three different things get called "a Plumsail form", and they remediate differen
 | Flavour | How to recognise it | Route |
 |---|---|---|
 | **Forms Designer** (the older, separate product) | Schema files are **`.xfds`**, root element `<FormsDesigner>` | No migration into modern Forms. Rebuild |
-| **Plumsail Forms, classic add-in model** | Installed as a **SharePoint add-in**; forms render at `/SitePages/PlumsailForms/...` in an iframe | Retired. Move to SPFx or rebuild |
-| **Plumsail Forms, SPFx** | **SPFx package in the tenant App Catalog**; forms render on SharePoint's own form pages (`/_layouts/15/SPListForm.aspx`) | Migrates. The rest of this section |
+| **Plumsail Forms, classic add-in model** | Installed as a **SharePoint add-in** from the site's own add-ins; forms render in a **classic** page with the form in an **iframe** from the add-in web | Retired. Move to SPFx or rebuild |
+| **Plumsail Forms, SPFx** | **SPFx package in the tenant App Catalog** (`IsClientSideSolution` true); forms render in the **modern** UI — on SharePoint's own form pages (`/_layouts/15/SPListForm.aspx`), or on older package versions on modern single-web-part pages under `/SitePages/PlumsailForms/`, reached through a redirect page | Migrates. The rest of this section |
 
 Three checks, none of which needs more than a browser:
 
-1. **Open a list's New form and look at the URL.** `/_layouts/15/...` is SPFx. `/SitePages/PlumsailForms/...` is the classic add-in.
+1. **Open a list's New form and look at the page, not the URL.** Modern SharePoint chrome with the form in a panel or on a modern page is SPFx; the classic ribbon-era page with the form in an iframe and its buttons at the bottom is the classic add-in. `/_layouts/15/...` is always SPFx, but **`/SitePages/PlumsailForms/...` is not proof of the add-in**: older SPFx packages point the content type's New form at `SitePages/PlumsailForms/redirect<version>.aspx`, which lands on a modern page in the same folder.
 2. **Look at the schema file extension** in `Site Pages/PlumsailForms/`. `.designer.json` is the modern product on SharePoint Online. `.xfds` is Forms Designer or on-premises.
-3. **Look at where the app is installed** — tenant App Catalog (SPFx) or the site's own add-ins (classic). The form URL alone does not tell you, so check the catalogue rather than inferring.
+3. **Look at where the app is installed** — tenant App Catalog (SPFx) or the site's own add-ins (classic). In the catalogue's *Apps for SharePoint* list, `IsClientSideSolution` is true for SPFx. The form URL alone does not tell you, so check the catalogue rather than inferring. **While you are there, note whether it is deployed tenant-wide** (`SkipFeatureDeployment`): if not, it was added site by site, and the target has to be set up the same way (precondition 1).
 
 There is also a shortcut worth knowing: **the SharePoint add-in model was fully retired on 2 April 2026.** So if the forms are working today, they are SPFx — classic add-in forms stopped rendering months ago and would have been reported as broken long before any migration. Use the checks to confirm it rather than to discover it.
 
@@ -72,7 +72,7 @@ Plan for it: **one designer pass per form**, and it is the same pass whether you
 
 All five. Any one of them missing gives you the default form or a script error, with no clue which.
 
-1. **The SPFx package is in the target App Catalog, deployed tenant-wide.** Needs a SharePoint administrator. It is not a site-level "add an app" step on the modern product.
+1. **The SPFx package is in the target App Catalog and available on every destination site.** Needs a SharePoint administrator. Either deploy it tenant-wide, or — if the source catalogue shows it was *not* deployed tenant-wide — add it to each destination site from *Site contents → Add an app*, as the source had it. Missing on one site gives that site the default form while its neighbours work.
 2. **Custom scripting is enabled on the destination site.** Off by default on group-connected sites:
    ```powershell
    Connect-SPOService -Url https://<org>-admin.sharepoint.com
@@ -103,7 +103,9 @@ Work down this list. It is ordered by how often it is the answer.
 |---|---|---|
 | Default SharePoint form, no error | Site Pages never migrated | Copy `Site Pages/PlumsailForms/` |
 | Default form, definition file is present | Never reattached to the migrated list, or the list or content type was renamed | Open the form in the designer against the target list and save it |
-| Default form on every list in the tenant | App not deployed tenant-wide in the target | Deploy the SPFx package in the App Catalog |
+| Default form on every list in the tenant | App not deployed in the target | Deploy the SPFx package in the App Catalog |
+| Default form on one site's lists only | Package not deployed tenant-wide and not added to that site | Add the app to the site, or deploy tenant-wide |
+| New form is a 404 under `SitePages/PlumsailForms/` | The list's content type still points at a `redirect<version>.aspx` page that did not come across with Site Pages | Copy `Site Pages/PlumsailForms/`, then re-save in the designer |
 | "Something went wrong (script error)" | CSP blocking the vendor hosts | Add both hosts to Trusted Script Sources |
 | Form renders, says trial or expired | Licence bound to the old domain, or cached | Re-bind the subscription; clear the browser cache |
 | Designer cannot save | Custom scripting denied, or not Full Control on Site Pages | `-DenyAddAndCustomizePages 0`; fix permissions |
