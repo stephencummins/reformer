@@ -9,7 +9,7 @@ One section per treatment, in the same words the report uses. Each one is in the
 Regardless of what you decide later, and first:
 
 - **Export every Microsoft Form's responses to Excel** and save the workbook in the owning site. Responses do not migrate by any route. It costs minutes and it is the only artefact guaranteed to survive.
-- **Export the Plumsail layouts** from the designer, per form, even though a content copy should carry them. Belt and braces, and free.
+- **Export the Plumsail layouts** from the designer, per form, even though a content copy should carry them. Belt and braces, and free — and it is the input to the export/import route, which is tested and does not depend on the content copy landing the Site Pages folder.
 - **Export each customised list form** as a package with **Create as New**.
 - **Capture the inventories** the scan needs from the source: the site listing, the property-bag readings, and a Microsoft Forms enumeration.
 - **Decommission no account until its forms are dealt with.** A form belonging to a deleted account is destroyed 30 days later and Microsoft states it is not recoverable.
@@ -72,7 +72,7 @@ Plan for it: **one designer pass per form**, and it is the same pass whether you
 
 All five. Any one of them missing gives you the default form or a script error, with no clue which.
 
-1. **The SPFx package is in the target App Catalog and available on every destination site.** Needs a SharePoint administrator. Either deploy it tenant-wide, or — if the source catalogue shows it was *not* deployed tenant-wide — add it to each destination site from *Site contents → Add an app*, as the source had it. Missing on one site gives that site the default form while its neighbours work.
+1. **The SPFx package is in the target App Catalog and available on every destination site.** Needs a SharePoint administrator. Either deploy it tenant-wide, or — if the source catalogue shows it was *not* deployed tenant-wide — add it to each destination site from *Site contents → Add an app*, as the source had it. Missing on one site gives that site the default form while its neighbours work. **Org Chart ships as a second, separate package** and is installed the same way: a tenant holding both products needs both in the target catalogue, deployed to **SharePoint and Teams**. Installing Forms alone leaves any org-chart control unrendered.
 2. **Custom scripting is enabled on the destination site.** Off by default on group-connected sites:
    ```powershell
    Connect-SPOService -Url https://<org>-admin.sharepoint.com
@@ -92,6 +92,18 @@ Order matters.
 3. Check the names still line up: list name and content type name must match the filenames in `PlumsailForms/`. Rename either and you have detached the form.
 4. **Reattach each form: open it in the designer against the target list and save it.** Install the current app package first, so the pass stamps current scripts rather than needing a second one. This is the step that actually binds the form to the migrated list, and it doubles as the proof that the licence, the scripting policy and the permissions are all in place — those three fail here, loudly, rather than later in front of a user.
 5. Open the list's **New** form in the browser. That is the test of success — not whether the files exist.
+
+### The export/import route, tested tenant to tenant
+
+Steps 1–3 above assume the list and its Site Pages are copied for you. When they are not — or when a single form has to move on its own — the designer's own **export from the source list, import into the target list** does the whole job, and it has been tested end to end between two tenants (Stephen Cummins, dev to dev, 21 Sep 2026).
+
+It is the same designer pass as step 4, so it carries the same guarantee: the import writes the definition, the association and the page scripts against the target tenant's installed package. What it needs on top of the five preconditions is only what that test confirmed:
+
+- **A licence in both tenants at once.** The test used the same 30-day trial on each side, which is the cheapest way to prove the route before the real subscription question (precondition 4) is settled — and it shows an overlap is possible, though a trial says nothing about how a paid subscription re-binds.
+- **The form designer installed on both sides.** The export comes out of the source designer and goes into the target one.
+- **Both app packages in the target App Catalog** — Forms, and Org Chart separately if it is used — pushed either tenant-wide or to the sites that carry Plumsail forms, for SharePoint and Teams.
+
+The test does not tell you how long a form takes at scale, and it was a form created for the test rather than a migrated one. Treat it as proof the route exists, not as a sizing.
 
 For more than about ten forms, script that reattach rather than clicking it: the provisioning package exposes `GetLayout()` to pull every layout from the source and `GenerateForms()` to write it against a target list and content type, which the vendor documents as working across lists, sites and tenants. It is the same operation the designer performs, in a loop. All three routes — content copy, designer export/import, provisioning API — assume the target list has the **same internal field names**, which it will if the list was migrated rather than rebuilt.
 
