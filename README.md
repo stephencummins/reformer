@@ -72,6 +72,16 @@ Exit `0` when nothing needs doing, `2` when there are forms to decide about, `1`
 
 The property bag is also *why* lists arrive broken: its value names the app in the tenant it was made in, so if a migration copies it verbatim the target list points at an app that does not exist there, and the new and edit pages open to a spinner. Clear the key, then import and publish the app, which writes a correct one.
 
+### Putting Plumsail lists back on the standard forms
+
+A Plumsail form's files travel with the content, but the package that renders them does not. If it is not in the target tenant's app catalogue, each list with a Plumsail form opens to a blank page. `reset-script` writes a script that clears the three form URLs on each affected list content type, which gives the list SharePoint's own forms back:
+
+```
+python3 -m reformer reset-script --out reset.js
+```
+
+reformer still never signs in or writes. A site admin reads the script and pastes it into the browser console on the site, where it runs with their session. It starts as a dry run and lists what it would change. With `DRY_RUN` set to `false` it clears the URLs, reads each one back, and prints a record; pasting that record in as `RESTORE` puts the URLs back. The definitions under `SitePages/PlumsailForms` are left alone. It only recognises forms attached through a page under `PlumsailForms`.
+
 ### What comes out
 
 A worklist, one row per form — not one per occurrence. The same binding is repeated in the app JSON, in the app's `Properties.json` and in its control tree, and a flow names the same form on both its trigger and its action. Counting those would overstate the inventory and, worse, double the effort figure that people plan against.
