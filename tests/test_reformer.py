@@ -163,6 +163,24 @@ class CaptureTests(unittest.TestCase):
         plum = res.of_kind("plumsail-form")[0]
         self.assertEqual(plum.name, "Travel")   # the list the definition serves
 
+    def test_one_plumsail_form_is_one_row_however_many_files_it_keeps(self):
+        """New, Edit and Display, a designer file beside each and the index are
+        one form on one list and content type. Counting files multiplied the
+        inventory and the effort figure by seven."""
+        base = "/sites/Example/SitePages/PlumsailForms/"
+        names = ["Travel_Item_New.json", "Travel_Item_New.designer.json",
+                 "Travel_Item_Edit.json", "Travel_Item_Edit.designer.json",
+                 "Travel_Item_Display.json", "Travel_Item_Display.designer.json",
+                 "forms_Travel_Item.json", "redirect1.1.0.aspx",
+                 "Travel_Claim_New.json", "Expenses_Item_New.designer.json"]
+        res = scan_site_listing([{"ServerRelativeUrl": base + n} for n in names], "Example")
+        plum = res.of_kind("plumsail-form")
+        self.assertEqual([f.identity for f in plum],
+                         [base + "Travel_Item", base + "Travel_Claim", base + "Expenses_Item"])
+        self.assertEqual([f.name for f in plum], ["Travel", "Travel", "Expenses"])
+        self.assertEqual(plum[0].detail["form_types"], ["New", "Edit", "Display"])
+        self.assertEqual(len(plum[0].detail["files"]), 7)
+
     def test_infopath_templates_are_ignored(self):
         """There is no InfoPath to find, so a template file is not a row to act
         on. Reporting one would only add work nobody has to do."""

@@ -66,7 +66,7 @@ Exit `0` when nothing needs doing, `2` when there are forms to decide about, `1`
 
 **Captured listings (JSON)** — for the things no package contains. Both accept a bare list, a `{"value": [...]}` envelope, or a single object.
 
-- `--site-listing` finds Plumsail definitions under `SitePages/PlumsailForms`. Any listing works as long as each row carries a path under `ServerRelativeUrl`, `Name` or `path`.
+- `--site-listing` finds Plumsail definitions under `SitePages/PlumsailForms`. Any listing works as long as each row carries a path under `ServerRelativeUrl`, `Name` or `path`. The New, Edit and Display definitions of one list and content type, with their `.designer.json` files and the `forms_` index, are reported as one form.
 - `--forms-listing` takes a Microsoft Forms tenant enumeration, which is what turns the Forms count from a floor into a real one. A row needs an `id` and a `title`; an owner is used when present.
 - `--property-bags` finds customised list forms from readings of `PowerAppFormProperties` on each list's folder. This is the only reliable way to enumerate them across a tenant, and far better than asking site owners.
 

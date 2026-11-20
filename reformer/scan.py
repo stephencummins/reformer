@@ -182,6 +182,7 @@ def scan_site_listing(rows: list[dict], site: str) -> ScanResult:
     under a ``Name``, ``ServerRelativeUrl`` or ``path`` key.
     """
     res = ScanResult()
+    forms: dict[str, Finding] = {}
     for row in rows:
         path = ""
         for key in ("ServerRelativeUrl", "serverRelativeUrl", "Name", "name", "path", "Path"):
@@ -192,19 +193,51 @@ def scan_site_listing(rows: list[dict], site: str) -> ScanResult:
             continue
         low = path.lower()
         if "plumsailforms/" in low and low.endswith(".json"):
-            res.add(Finding("plumsail-form", path, site, name=_plumsail_name(path)))
+            folder, _, leaf = path.rpartition("/")
+            stem, form_type = _plumsail_parts(leaf)
+            key = f"{folder}/{stem}".lower()
+            found = forms.get(key)
+            if found is None:
+                found = Finding("plumsail-form", f"{folder}/{stem}", site, name=_plumsail_name(path),
+                                detail={"form_types": [], "files": []})
+                forms[key] = found
+                res.add(found)
+            found.detail["files"].append(leaf)
+            if form_type and form_type not in found.detail["form_types"]:
+                found.detail["form_types"].append(form_type)
     return res
+
+
+_PLUMSAIL_FORM_TYPES = ("New", "Edit", "Display")
+
+
+def _plumsail_parts(leaf: str) -> tuple[str, str]:
+    """Split a definition's filename into the form it belongs to and its type.
+
+    Plumsail attaches a form per **list and content type**, and keeps several
+    files for it: ``{List}_{ContentType}_{New|Edit|Display}.json``, a
+    ``.designer.json`` beside each, and a ``forms_{List}_{ContentType}.json``
+    index. Those are one form to verify, not seven. A name that does not fit
+    the pattern stays its own form, so nothing is merged on a guess.
+    """
+    stem = leaf
+    for suffix in (".designer.json", ".json"):
+        if stem.lower().endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    if stem.lower().startswith("forms_"):
+        return stem[len("forms_"):], ""
+    for form_type in _PLUMSAIL_FORM_TYPES:
+        if stem.lower().endswith("_" + form_type.lower()):
+            return stem[: -len(form_type) - 1], form_type
+    return stem, ""
 
 
 def _plumsail_name(path: str) -> str:
     """Plumsail names a definition ``{List}_{ContentType}_{FormType}``, so the
     list it belongs to is readable straight off the filename."""
-    leaf = path.rsplit("/", 1)[-1]
-    for suffix in (".designer.json", ".json"):
-        if leaf.lower().endswith(suffix):
-            leaf = leaf[: -len(suffix)]
-            break
-    return leaf.split("_", 1)[0] if "_" in leaf else leaf
+    stem, _ = _plumsail_parts(path.rsplit("/", 1)[-1])
+    return stem.split("_", 1)[0] if "_" in stem else stem
 
 
 def scan_forms_listing(rows: list[dict], source: str) -> ScanResult:
