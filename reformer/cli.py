@@ -1,6 +1,7 @@
 """Command line.
 
     reformer scan <path ...> [--site-listing F] [--property-bags F] [--json F] [--html F]
+    reformer reset-script [--site /sites/Example] [--out reset.js]
     reformer selftest
 
 Exit codes: 0 clean · 2 forms found that need a decision · 1 error. The 2 is
@@ -140,6 +141,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", help="write the machine-readable report here")
     p.add_argument("--html", help="write the readable report here")
 
+    p = sub.add_parser("reset-script",
+                       help="write the browser-console script that puts lists with a Plumsail form "
+                            "back on the standard SharePoint forms")
+    p.add_argument("--site", metavar="PATH",
+                   help="pin the script to one server-relative site path, e.g. /sites/Example; "
+                        "without it the script works on the site it is run from")
+    p.add_argument("--out", help="write the script here instead of printing it")
+
     sub.add_parser("selftest", help="run the unit tests")
 
     a = ap.parse_args(argv)
@@ -150,5 +159,19 @@ def main(argv: list[str] | None = None) -> int:
         result = unittest.TextTestRunner(verbosity=1).run(
             unittest.defaultTestLoader.discover(str(tests)))
         return 0 if result.wasSuccessful() else 1
+
+    if a.cmd == "reset-script":
+        from .reset import reset_script
+        try:
+            text = reset_script(a.site, __version__)
+        except ValueError as e:
+            print(f"reformer: {e}", file=sys.stderr)
+            return 1
+        if a.out:
+            Path(a.out).write_text(text, encoding="utf-8")
+            print(f"wrote {a.out} - read it, then run it in the browser console on the site (dry run first)")
+        else:
+            sys.stdout.write(text)
+        return 0
 
     return _scan(a)

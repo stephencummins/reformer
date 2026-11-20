@@ -16,6 +16,7 @@ from reformer import cli
 from reformer.classify import CONTENT, CONVERT, RECREATE, ROUTE, classify, totals
 from reformer.package import Container, walk_dicts
 from reformer.report import to_html, to_json
+from reformer.reset import reset_script
 from reformer.scan import (merge, scan_forms_listing, scan_package, scan_property_bags,
                            scan_site_listing)
 
@@ -376,6 +377,45 @@ class MergeTests(unittest.TestCase):
         rows = [{"ServerRelativeUrl": "/sites/E/SitePages/PlumsailForms/A_Item_New.designer.json"}]
         a, b = scan_site_listing(rows, "E"), scan_site_listing(rows, "E")
         self.assertEqual(len(merge(a, b).findings), 1)
+
+
+class ResetScriptTests(unittest.TestCase):
+    def test_the_script_starts_as_a_dry_run(self):
+        """It is pasted into a console on a live site. The first run must not
+        be able to change anything."""
+        text = reset_script()
+        self.assertIn("const DRY_RUN = true;", text)
+        self.assertIn("const RESTORE = null;", text)
+        self.assertIn("const SITE = null;", text)
+
+    def test_a_site_is_pinned_only_if_it_is_a_plain_path(self):
+        self.assertIn('const SITE = "/sites/Example";', reset_script("/sites/Example/"))
+        for bad in ["https://example.sharepoint.com/sites/E", "/sites/E\";alert(1)//", "sites/E", "/sites/E?x=1"]:
+            with self.assertRaises(ValueError):
+                reset_script(bad)
+
+    def test_it_only_touches_form_urls_that_point_at_plumsail(self):
+        text = reset_script()
+        self.assertIn('const MARKER = "/plumsailforms/";', text)
+        self.assertNotIn("DELETE", text)      # definitions stay in the site
+
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_the_script_is_valid_javascript(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "reset.js"
+            f.write_text(reset_script("/sites/Example"), encoding="utf-8")
+            done = subprocess.run(["node", "--check", str(f)], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_the_command_writes_the_script(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "reset.js"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["reset-script", "--site", "/sites/Example", "--out", str(out)]), 0)
+            self.assertIn("DRY_RUN", out.read_text(encoding="utf-8"))
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(cli.main(["reset-script", "--site", "nope"]), 1)
 
 
 if __name__ == "__main__":
